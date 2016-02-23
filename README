@@ -1,0 +1,39 @@
+Prerequisites
+
+For most people the default docker installation will be fine and in fact you can just proceed with the presumption you are fine and run the the image and see if it starts. If you're watching the couchbase build process carefully you will see couchbase's installation throw a warning about:
+
+/opt/couchbase/etc/couchbase_init.d: 47: ulimit: error setting limit (Operation not permitted)
+While this may seem like a potential problem it is a red herring. What it's trying to do is allocated itself proper headroom for memory and open files (as Couchbase is a big consumer of both) but programs that run under upstart are regulated by their configuration in the /etc/config directory and in turn containers that run under Docker inherit limits set by the docker.conf file (if you have one … some distros don't). While it can't allocate the headroom directly itself it is likely that Docker is already asking for enough resources to share with your couchbase container. Memory, for instance, is unlimited.
+
+Here is what has been historically recommended for the /etc/init/docker.conf file in other couchbase Dockerfile's i've seen:
+
+limit memlock unlimited unlimited
+limit nofile 262144
+For most people the “nofile” limit is actually LESS than what docker asks for (Docker may have histically asked for less?). Anyway, do not move downward from any limit set. As already stated, typically memory is NOT limited by Docker but if it is you can change it to how it is represented above (or just remove it completely).
+
+If you had to make any changes, you'll need to restart the docker daemon. On modern Ubuntu versions this is managed by upstart so you should just type sudo service docker restart, if you're not using upstart then try: /etc/init.d/docker restart.
+
+RELEASE
+1.3 ==> Shared libraries : /data/mysql/lib,  /var/log/redis   /var/log/mysql  /var/run/mysqld
+        Working directory for Mysql's databases : /data/mysql/lib
+
+RUN
+
+interactive Mode 
+docker run -ti --rm -v /data/mysql/lib:/data/mysql/lib -v /var/log/redis:/var/log/redis -v /var/log/mysql:/var/log/mysql -v /var/run/mysqld:/var/run/mysqld -p 6379:6379 -p 8091:8091 -p 8092:8092 -p 11210:11210 -p 11211:11211 -p 3306:3306 jfgrimault/mysql_redis_couchbase
+
+daemons mode
+docker run -d -v /data/mysql/lib:/data/mysql/lib -v /var/log/redis:/var/log/redis -v /var/log/mysql:/var/log/mysql -v /var/run/mysqld:/var/run/mysqld -p 6379:6379 -p 8091:8091 -p 8092:8092 -p 11210:11210 -p 11211:11211 -p 3306:3306 jfgrimault/mysql_redis_couchbase
+
+MYSQL UPDATE DATABASES
+Put your SQL file for update or create shema in a library shared with your container, and start container :
+docker run -d -e STARTUP_SQL=/data/mysql/sql -v /data/mysql/sql:/data/mysql/sql -v /data/mysql/lib:/data/mysql/lib -v /var/log/redis:/var/log/redis -v /var/log/mysql:/var/log/mysql -v /var/run/mysqld:/var/run/mysqld -p 6379:6379 -p 8091:8091 -p 8092:8092 -p 11210:11210 -p 11211:11211 -p 3306:3306 jfgrimault/mysql_redis_couchbase
+
+CLIENT
+
+mysql -uroot
+redis-cli
+couchbase-cli bucket-list -c localhost:8091 -u "$COUCHBASE_USER" -p "$COUCHBASE_PASS"
+
+Done!
+
